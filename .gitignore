@@ -16,3 +16,7 @@ terraform.tfvars
 terraform.tfstate*
 .terraform*
 __pycache__/
+
+public/
+node_modules/
+resources/
