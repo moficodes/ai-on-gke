@@ -31,6 +31,12 @@ __pycache__/
 default.tfstate
 default.tfstate.backup
 .terraform*
+__pycache__/
+
+public/
+node_modules/
+resources/
 terraform.tfstate*
 terraform.tfvars
 tfplan
+
