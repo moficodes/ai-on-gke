@@ -12,69 +12,61 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-project_id = "<your project ID>"
+project_id      = "<your project ID>"
+create_network  = true         # Creates a new VPC for your cluster. Disable to use an existing network.
+network_name    = "ml-network" # Creates a network named ml-network by default. If using an existing VPC, ensure you follow the README instructions to enable Private Service Connect for your VPC.
+subnetwork_cidr = "10.100.0.0/16"
 
-## this is required for terraform to connect to GKE master and deploy workloads
-create_cluster   = false # this flag will create a new standard public gke cluster in default network
-cluster_name     = "<cluster_name>"
-cluster_location = "us-central1"
+create_cluster    = true # Creates a GKE cluster in the specified network.
+cluster_name      = "<cluster-name>"
+cluster_location  = "us-central1"
+autopilot_cluster = false
+private_cluster   = false
 
 ## GKE environment variables
 kubernetes_namespace = "rag"
-create_gcs_bucket    = true
-gcs_bucket           = "rag-data-xyzu" # Choose a globally unique bucket name.
 
-cloudsql_instance        = "pgvector-instance"
-cloudsql_instance_region = "us-central1" # defaults to cluster_location, if not specified
+# The bucket name must be globally unique (across all of Google Cloud).
+# To verify, check that `gcloud storage buckets describe gs://<bucketname>` returns a 404.
+create_gcs_bucket = true
+gcs_bucket        = "rag-data-<username>"
+
+# Ensure the instance name is unique to your project.
+cloudsql_instance = "pgvector-instance"
+
 ## Service accounts
+
 # Creates a google service account & k8s service account & configures workload identity with appropriate permissions.
-# Set to false & update the variable `ray_service_account` to use an existing IAM service account.
-create_ray_service_account      = true
 ray_service_account             = "ray-sa"
 enable_grafana_on_ray_dashboard = false
-# Creates a google service account & k8s service account & configures workload identity with appropriate permissions.
-# Set to false & update the variable `rag_service_account` to use an existing IAM service account.
-create_rag_service_account = true
-rag_service_account        = "rag-sa"
 
 # Creates a google service account & k8s service account & configures workload identity with appropriate permissions.
-# Set to false & update the variable `jupyter_service_account` to use an existing IAM service account.
-jupyter_service_account = "jupyter"
+rag_service_account = "rag-sa"
+
+# Creates a google service account & k8s service account & configures workload identity with appropriate permissions.
+jupyter_service_account = "jupyter-sa"
 
 ## Embeddings table name - change this to the TABLE_NAME used in the notebook.
-dataset_embeddings_table_name = "googlemaps_reviews_db"
+dataset_embeddings_table_name = "netflix_reviews_db"
 
-## IAP config
-brand = "projects/<prj-number>/brands/<prj-number>"
+##############################################################################################################
+# If you don't want to enable IAP authenticated access for your endpoints, ignore everthing below this line. #
+##############################################################################################################
+
+# NOTE: If enabling IAP by setting the variables below to true, first configure your OAuth consent screen: (https://developers.google.com/workspace/guides/configure-oauth-consent#configure_oauth_consent).
+# Ensure 'User type' is 'Internal'.
 
 ## Jupyter IAP Settings
-jupyter_add_auth                 = false # Set to true when using auth with IAP
-jupyter_support_email            = "<email>"
-jupyter_k8s_ingress_name         = "jupyter-ingress"
-jupyter_k8s_managed_cert_name    = "jupyter-managed-cert"
-jupyter_k8s_iap_secret_name      = "jupyter-iap-secret"
-jupyter_k8s_backend_config_name  = "jupyter-iap-config"
-jupyter_k8s_backend_service_name = "proxy-public"
-jupyter_k8s_backend_service_port = 80
-
-jupyter_url_domain_addr   = ""
-jupyter_url_domain_name   = ""
-jupyter_client_id         = ""
-jupyter_client_secret     = ""
-jupyter_members_allowlist = ["allAuthenticatedUsers", "user:<email>"]
+jupyter_add_auth          = false                                                                 # Set to true to enable authenticated access via IAP.
+jupyter_domain            = ""                                                                    # Custom domain for ingress resource and ssl certificate. If empty, it will use nip.io wildcard DNS.
+jupyter_members_allowlist = "user:<email>,group:<email>,serviceAccount:<email>,domain:google.com" # Allowlist principals for access.
 
 ## Frontend IAP Settings
-frontend_add_auth                 = false # Set to true when using auth with IAP
-frontend_support_email            = "<email>"
-frontend_k8s_ingress_name         = "frontend-ingress"
-frontend_k8s_managed_cert_name    = "frontend-managed-cert"
-frontend_k8s_iap_secret_name      = "frontend-iap-secret"
-frontend_k8s_backend_config_name  = "frontend-iap-config"
-frontend_k8s_backend_service_name = "rag-frontend"
-frontend_k8s_backend_service_port = 8080
+frontend_add_auth          = false                                                                 # Set to true to enable authenticated access via IAP.
+frontend_domain            = ""                                                                    # Custom domain for ingress resource and ssl certificate. If empty, it will use nip.io wildcard DNS.
+frontend_members_allowlist = "user:<email>,group:<email>,serviceAccount:<email>,domain:google.com" # Allowlist principals for access.
 
-frontend_url_domain_addr   = ""
-frontend_url_domain_name   = ""
-frontend_client_id         = ""
-frontend_client_secret     = ""
-frontend_members_allowlist = ["allAuthenticatedUsers", "user:<email>"]
+## Ray Dashboard IAP Settings
+ray_dashboard_add_auth          = false                                                                 # Set to true to enable authenticated access via IAP.
+ray_dashboard_domain            = ""                                                                    # Custom domain for ingress resource and ssl certificate. If empty, it will use nip.io wildcard DNS.
+ray_dashboard_members_allowlist = "user:<email>,group:<email>,serviceAccount:<email>,domain:google.com" # Allowlist principals for access.

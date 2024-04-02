@@ -13,14 +13,27 @@
 # limitations under the License.
 
 output "jupyterhub_uri" {
-  value = "http://${module.jupyterhub.jupyterhub_uri}"
+  description = "JupyterHub Endpoint to access user interface. In case of private IP, consider port-forwarding."
+  value       = module.jupyterhub.jupyterhub_uri != "" ? "http://${module.jupyterhub.jupyterhub_uri}" : local.jupyterhub_default_uri
+}
+
+output "jupyterhub_ip_address" {
+  description = "JupyterHub global IP address"
+  value       = module.jupyterhub.jupyterhub_ip_address
 }
 
 output "jupyterhub_user" {
-  value = module.jupyterhub.jupyterhub_user
+  description = "JupyterHub user is only required for standard authentication. Ignore, in case of IAP authentication"
+  value       = module.jupyterhub.jupyterhub_user
 }
 
 output "jupyterhub_password" {
-  value     = module.jupyterhub.jupyterhub_password
-  sensitive = true
+  description = "JupyterHub password is only required for standard authentication. Ignore, in case of IAP authentication"
+  value       = module.jupyterhub.jupyterhub_password
+  sensitive   = true
+}
+
+output "kubernetes_namespace" {
+  value       = local.kubernetes_namespace
+  description = "Kubernetes namespace"
 }

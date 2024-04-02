@@ -17,6 +17,18 @@ variable "namespace" {
   description = "Kubernetes namespace where resources are deployed"
 }
 
+variable "notebook_image" {
+  type        = string
+  description = "Jupyter notebook image name"
+  default     = "jupyter/tensorflow-notebook"
+}
+
+variable "notebook_image_tag" {
+  type        = string
+  description = "Jupyter notebook image tag"
+  default     = "python-3.10"
+}
+
 variable "members_allowlist" {
   type    = list(string)
   default = []
@@ -31,6 +43,13 @@ variable "add_auth" {
 variable "gcs_bucket" {
   type        = string
   description = "GCS bucket to mount on the notebook via GCSFuse and CSI"
+}
+
+variable "additional_labels" {
+  // list(string) is used instead of map(string) since blueprint metadata does not support maps.
+  type        = list(string)
+  description = "Additional labels to add to Kubernetes resources."
+  default     = ["created-by=ai-on-gke", "ai.gke.io=jupyter"]
 }
 
 variable "workload_identity_service_account" {
@@ -90,21 +109,14 @@ variable "k8s_backend_service_port" {
   default     = 80
 }
 
-variable "brand" {
-  type        = string
-  description = "name of the brand if there isn't already on the project. If there is already a brand for your project, please leave it blank and empty"
-  default     = ""
+variable "create_brand" {
+  type        = bool
+  description = "Create Brand OAuth Screen"
 }
 
-variable "url_domain_addr" {
+variable "domain" {
   type        = string
-  description = "Domain provided by the user. If it's empty, we will create one for you."
-  default     = ""
-}
-
-variable "url_domain_name" {
-  type        = string
-  description = "Name of the domain provided by the user. This var will only be used if url_domain_addr is not empty"
+  description = "Provide domain for ingress resource and ssl certificate. If it's empty, it will use nip.io wildcard dns"
   default     = ""
 }
 
@@ -135,3 +147,22 @@ variable "ephemeral_storage" {
 variable "autopilot_cluster" {
   type = bool
 }
+
+variable "db_region" {
+  type        = string
+  description = "Cloud SQL instance region"
+  default     = ""
+}
+
+variable "db_secret_name" {
+  type        = string
+  description = "CloudSQL user credentials"
+  default     = "dummy_value"
+}
+
+variable "cloudsql_instance_name" {
+  type        = string
+  description = "Cloud SQL instance name"
+  default     = ""
+}
+

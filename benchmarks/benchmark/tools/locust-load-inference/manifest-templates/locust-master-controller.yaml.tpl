@@ -26,8 +26,6 @@ spec:
               value: http://${inference_server_service}
             - name: BACKEND
               value: ${inference_server_framework}
-            - name: ENABLE_CUSTOM_METRICS
-              value: ${enable_custom_metrics}
           ports:
             - name: loc-master-web
               containerPort: 8089
@@ -38,12 +36,15 @@ spec:
             - name: loc-master-p2
               containerPort: 5558
               protocol: TCP
+        - name: locust-custom-metrics-exporter
+          image: ${artifact_registry}/locust-custom-exporter:latest
+          ports:
+            - name: cmetrics-port
+              containerPort: 8080
+              protocol: TCP
         - name: locust-metrics-exporter
           image: containersol/locust_exporter
-          env:
-            - name: LOCUST_EXPORTER_WEB_LISTEN_ADDRESS
-              value: ":8080"
           ports:
             - name: metrics-port
-              containerPort: 8080
+              containerPort: 9646
               protocol: TCP

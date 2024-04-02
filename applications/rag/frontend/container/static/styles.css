@@ -84,6 +84,15 @@ p.response::before {
     font-weight: bold;
 }
 
+p.warning {
+    background-color: rgba(255, 229, 100, 0.1);
+}
+
+p.error::before {
+    content: 'Warning: ';
+    font-weight: bold;
+}
+
 p.error {
     background-color: rgba(255, 0, 0, 0.1);
 }
@@ -126,13 +135,8 @@ input[type="submit"]:disabled {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Optional: adds a slight shadow for depth */
 }
 
-#filter-section-toggle {
-    margin-bottom: 20px;
-}
-
 #dlp-filter-section,
 #nlp-filter-section {
-    display: none; /* Initially hidden, shown when respective toggle is checked */
     margin-top: 20px;
 }
 
@@ -157,4 +161,39 @@ input[type="checkbox"] {
 #nlp-range {
     width: 100%;
     margin-top: 10px; /* Adjusted for consistency */
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    background: #ddd;
+    outline: none;
+    opacity: 1;
+    -webkit-transition: .2s;
+    transition: opacity .2s;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 25px;
+    height: 25px;
+    background: var(--thumb-color);
+    cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 25px;
+    height: 25px;
+    background: var(--thumb-color);
+    cursor: pointer;
+}
+
+input[type="range"]::-ms-thumb {
+    width: 25px;
+    height: 25px;
+    background: var(--thumb-color);
+    cursor: pointer;
 }

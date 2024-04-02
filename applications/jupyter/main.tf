@@ -25,6 +25,36 @@ data "google_project" "project" {
   project_id = var.project_id
 }
 
+## Enable Required GCP Project Services APIs
+module "project-services" {
+  source  = "terraform-google-modules/project-factory/google//modules/project_services"
+  version = "~> 14.5"
+
+  project_id                  = var.project_id
+  disable_services_on_destroy = false
+  disable_dependent_services  = false
+  activate_apis = flatten([
+    "autoscaling.googleapis.com",
+    "cloudbuild.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "compute.googleapis.com",
+    "config.googleapis.com",
+    "connectgateway.googleapis.com",
+    "container.googleapis.com",
+    "containerfilesystem.googleapis.com",
+    "dns.googleapis.com",
+    "gkehub.googleapis.com",
+    "iamcredentials.googleapis.com",
+    "logging.googleapis.com",
+    "monitoring.googleapis.com",
+    "pubsub.googleapis.com",
+    "servicenetworking.googleapis.com",
+    "serviceusage.googleapis.com",
+    "sourcerepo.googleapis.com",
+    (var.add_auth ? ["iap.googleapis.com"] : [])
+  ])
+}
+
 module "infra" {
   source = "../../infrastructure"
   count  = var.create_cluster ? 1 : 0
@@ -39,12 +69,14 @@ module "infra" {
   subnetwork_name   = "default"
   cpu_pools         = var.cpu_pools
   enable_gpu        = false
+  depends_on        = [module.project-services]
 }
 
 data "google_container_cluster" "default" {
-  count    = var.create_cluster ? 0 : 1
-  name     = var.cluster_name
-  location = var.cluster_location
+  count      = var.create_cluster ? 0 : 1
+  name       = var.cluster_name
+  location   = var.cluster_location
+  depends_on = [module.project-services]
 }
 
 locals {
@@ -54,10 +86,12 @@ locals {
   cluster_membership_id = var.cluster_membership_id == "" ? var.cluster_name : var.cluster_membership_id
   enable_autopilot      = var.create_cluster ? var.autopilot_cluster : data.google_container_cluster.default[0].enable_autopilot
   host                  = local.private_cluster ? "https://connectgateway.googleapis.com/v1/projects/${data.google_project.project.number}/locations/${var.cluster_location}/gkeMemberships/${local.cluster_membership_id}" : local.endpoint
+  kubernetes_namespace  = var.goog_cm_deployment_name != "" ? "${var.goog_cm_deployment_name}-${var.kubernetes_namespace}" : var.kubernetes_namespace
 }
 
 locals {
   workload_identity_service_account = var.goog_cm_deployment_name != "" ? "${var.goog_cm_deployment_name}-${var.workload_identity_service_account}" : var.workload_identity_service_account
+  jupyterhub_default_uri            = "https://console.cloud.google.com/kubernetes/service/${var.cluster_location}/${var.cluster_name}/${local.kubernetes_namespace}/proxy-public/overview?project=${var.project_id}"
 }
 
 provider "kubernetes" {
@@ -101,18 +135,8 @@ module "gcs" {
 module "namespace" {
   source           = "../../modules/kubernetes-namespace"
   providers        = { helm = helm.jupyter }
-  namespace        = var.kubernetes_namespace
+  namespace        = local.kubernetes_namespace
   create_namespace = true
-}
-
-# IAP Section: Enabled the IAP service
-resource "google_project_service" "project_service" {
-  count   = var.add_auth ? 1 : 0
-  project = var.project_id
-  service = "iap.googleapis.com"
-
-  disable_dependent_services = false
-  disable_on_destroy         = false
 }
 
 # Creates jupyterhub
@@ -120,14 +144,17 @@ module "jupyterhub" {
   source                            = "../../modules/jupyter"
   providers                         = { helm = helm.jupyter, kubernetes = kubernetes.jupyter }
   project_id                        = var.project_id
-  namespace                         = var.kubernetes_namespace
+  namespace                         = local.kubernetes_namespace
+  additional_labels                 = var.additional_labels
   workload_identity_service_account = local.workload_identity_service_account
   gcs_bucket                        = var.gcs_bucket
   autopilot_cluster                 = local.enable_autopilot
+  notebook_image                    = "jupyter/tensorflow-notebook"
+  notebook_image_tag                = "python-3.10"
 
   # IAP Auth parameters
   add_auth                 = var.add_auth
-  brand                    = var.brand
+  create_brand             = var.create_brand
   support_email            = var.support_email
   client_id                = var.client_id
   client_secret            = var.client_secret
@@ -137,8 +164,7 @@ module "jupyterhub" {
   k8s_backend_config_name  = var.k8s_backend_config_name
   k8s_backend_service_name = var.k8s_backend_service_name
   k8s_backend_service_port = var.k8s_backend_service_port
-  url_domain_addr          = var.url_domain_addr
-  url_domain_name          = var.url_domain_name
-  members_allowlist        = var.members_allowlist
+  domain                   = var.domain
+  members_allowlist        = var.members_allowlist != "" ? split(",", var.members_allowlist) : []
   depends_on               = [module.gcs, module.namespace]
 }

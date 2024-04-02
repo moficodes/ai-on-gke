@@ -16,6 +16,14 @@ data "google_project" "project" {
   project_id = var.project_id
 }
 
+locals {
+  cloudsql_instance_connection_name = var.cloudsql_instance_name != "" ? format("%s:%s:%s", var.project_id, var.db_region, var.cloudsql_instance_name) : ""
+  additional_labels = tomap({
+    for item in var.additional_labels :
+    split("=", item)[0] => split("=", item)[1]
+  })
+}
+
 # IAP Section: Creates the GKE components
 module "iap_auth" {
   count  = var.add_auth ? 1 : 0
@@ -23,9 +31,9 @@ module "iap_auth" {
 
   project_id               = var.project_id
   namespace                = var.namespace
-  support_email            = var.support_email
   app_name                 = "jupyter"
-  brand                    = var.brand
+  create_brand             = var.create_brand
+  support_email            = var.support_email
   k8s_ingress_name         = var.k8s_ingress_name
   k8s_managed_cert_name    = var.k8s_managed_cert_name
   k8s_iap_secret_name      = var.k8s_iap_secret_name
@@ -34,8 +42,8 @@ module "iap_auth" {
   k8s_backend_service_port = var.k8s_backend_service_port
   client_id                = var.client_id
   client_secret            = var.client_secret
-  url_domain_addr          = var.url_domain_addr
-  url_domain_name          = var.url_domain_name
+  domain                   = var.domain
+  members_allowlist        = var.members_allowlist
   depends_on = [
     helm_release.jupyterhub
   ]
@@ -99,44 +107,54 @@ resource "helm_release" "jupyterhub" {
   namespace        = var.namespace
   create_namespace = true
   cleanup_on_fail  = "true"
-  # This timeout is sufficient and ensures terraform doesn't hang for 20 minutes on error.
-  # Autopilot deployment will complete even faster than Standard, as it relies on Ray Autoscaler to provision user pods.
-  timeout = 300
+  timeout          = 600
 
   values = var.autopilot_cluster ? [templatefile("${path.module}/jupyter_config/config-selfauth-autopilot.yaml", {
-    password            = var.add_auth ? "dummy" : random_password.generated_password[0].result
-    project_id          = var.project_id
-    project_number      = data.google_project.project.number
-    namespace           = var.namespace
-    backend_config      = var.k8s_backend_config_name
-    service_name        = var.k8s_backend_service_name
-    authenticator_class = var.add_auth ? "'gcpiapjwtauthenticator.GCPIAPAuthenticator'" : "dummy"
-    service_type        = var.add_auth ? "NodePort" : "LoadBalancer"
-    gcs_bucket          = var.gcs_bucket
-    k8s_service_account = var.workload_identity_service_account
-    ephemeral_storage   = var.ephemeral_storage
+    password                          = var.add_auth ? "dummy" : random_password.generated_password[0].result
+    project_id                        = var.project_id
+    project_number                    = data.google_project.project.number
+    namespace                         = var.namespace
+    additional_labels                 = local.additional_labels
+    backend_config                    = var.k8s_backend_config_name
+    service_name                      = var.k8s_backend_service_name
+    authenticator_class               = var.add_auth ? "'gcpiapjwtauthenticator.GCPIAPAuthenticator'" : "dummy"
+    service_type                      = var.add_auth ? "NodePort" : "ClusterIP"
+    gcs_bucket                        = var.gcs_bucket
+    k8s_service_account               = var.workload_identity_service_account
+    ephemeral_storage                 = var.ephemeral_storage
+    secret_name                       = var.db_secret_name
+    cloudsql_instance_connection_name = local.cloudsql_instance_connection_name
+
+    notebook_image     = var.notebook_image
+    notebook_image_tag = var.notebook_image_tag
     })
     ] : [templatefile("${path.module}/jupyter_config/config-selfauth.yaml", {
-      password            = var.add_auth ? "dummy" : random_password.generated_password[0].result
-      project_id          = var.project_id
-      project_number      = data.google_project.project.number
-      namespace           = var.namespace
-      backend_config      = var.k8s_backend_config_name
-      service_name        = var.k8s_backend_service_name
-      authenticator_class = var.add_auth ? "'gcpiapjwtauthenticator.GCPIAPAuthenticator'" : "dummy"
-      service_type        = var.add_auth ? "NodePort" : "LoadBalancer"
-      gcs_bucket          = var.gcs_bucket
-      k8s_service_account = var.workload_identity_service_account
-      ephemeral_storage   = var.ephemeral_storage
+      password                          = var.add_auth ? "dummy" : random_password.generated_password[0].result
+      project_id                        = var.project_id
+      project_number                    = data.google_project.project.number
+      namespace                         = var.namespace
+      additional_labels                 = local.additional_labels
+      backend_config                    = var.k8s_backend_config_name
+      service_name                      = var.k8s_backend_service_name
+      authenticator_class               = var.add_auth ? "'gcpiapjwtauthenticator.GCPIAPAuthenticator'" : "dummy"
+      service_type                      = var.add_auth ? "NodePort" : "ClusterIP"
+      gcs_bucket                        = var.gcs_bucket
+      k8s_service_account               = var.workload_identity_service_account
+      ephemeral_storage                 = var.ephemeral_storage
+      secret_name                       = var.db_secret_name
+      cloudsql_instance_connection_name = local.cloudsql_instance_connection_name
+      notebook_image                    = var.notebook_image
+      notebook_image_tag                = var.notebook_image_tag
     })
   ]
   depends_on = [module.jupyterhub-workload-identity]
 }
 
-data "kubernetes_service" "jupyter-ingress" {
+data "kubernetes_service" "jupyter" {
   metadata {
     name      = var.k8s_backend_service_name
     namespace = var.namespace
   }
   depends_on = [module.iap_auth, helm_release.jupyterhub]
 }
+

@@ -21,6 +21,10 @@ resource "google_storage_bucket_iam_member" "gcs-bucket-iam" {
 locals {
   security_context                  = { for k, v in var.security_context : k => v if v != null }
   cloudsql_instance_connection_name = format("%s:%s:%s", var.project_id, var.db_region, var.cloudsql_instance_name)
+  additional_labels = tomap({
+    for item in var.additional_labels :
+    split("=", item)[0] => split("=", item)[1]
+  })
 }
 
 resource "helm_release" "ray-cluster" {
@@ -30,16 +34,21 @@ resource "helm_release" "ray-cluster" {
   namespace        = var.namespace
   create_namespace = true
   version          = "1.0.0"
+  # Timeout is increased to guarantee sufficient scale-up time for Autopilot nodes.
+  timeout = 1200
+  wait    = true
 
   values = [
     templatefile("${path.module}/values.yaml", {
       gcs_bucket                        = var.gcs_bucket
       k8s_service_account               = var.google_service_account
+      additional_labels                 = local.additional_labels
       grafana_host                      = var.grafana_host
       security_context                  = local.security_context
       secret_name                       = var.db_secret_name
       cloudsql_instance_connection_name = local.cloudsql_instance_connection_name
-      image_tag                         = var.enable_gpu ? "2.9.3-py310-gpu" : "2.9.3-py310"
+      image                             = var.use_custom_image ? "us-central1-docker.pkg.dev/ai-on-gke/rag-on-gke/ray-image" : "rayproject/ray"
+      image_tag                         = var.enable_gpu ? "2.9.3-py310-gpu" : var.use_custom_image ? "2.9.3-py310-gpu" : "2.9.3-py310"
       resource_requests = var.enable_gpu ? {
         "cpu"               = "8"
         "memory"            = "32G"
@@ -68,14 +77,14 @@ resource "helm_release" "ray-cluster" {
         "iam.gke.io/gke-metadata-server-enabled" : "true"
         } : var.enable_gpu ? {
         "iam.gke.io/gke-metadata-server-enabled" : "true"
-        "cloud.google.com/gke-accelerator" : "nvidia-tesla-t4"
+        "cloud.google.com/gke-accelerator" : "nvidia-l4"
         } : var.enable_tpu ? {
         "iam.gke.io/gke-metadata-server-enabled" : "true"
         "cloud.google.com/gke-tpu-accelerator" : "tpu-v4-podslice"
         "cloud.google.com/gke-tpu-topology" : "2x2x1"
         "cloud.google.com/gke-placement-group" : "tpu-pool"
         } : {
-        "iam.gke.io / gke-metadata-server-enabled" : "true"
+        "iam.gke.io/gke-metadata-server-enabled" : "true"
       }
     })
   ]
@@ -90,60 +99,39 @@ data "kubernetes_service" "head-svc" {
 }
 
 # Allow ingress to the kuberay head from outside the cluster
-resource "kubernetes_network_policy" "kuberay-head-network-policy" {
+resource "kubernetes_network_policy" "kuberay-head-namespace-network-policy" {
   count = var.disable_network_policy ? 0 : 1
   metadata {
-    name      = "terraform-kuberay-head-network-policy"
+    name      = "terraform-kuberay-head-namespace-network-policy"
     namespace = var.namespace
   }
 
   spec {
     pod_selector {
       match_labels = {
-        "ray.io/is-ray-node" : "yes"
+        "ray.io/node-type" : "head"
       }
     }
 
     ingress {
-      # Ray Client server
-      ports {
-        port     = "10001"
-        protocol = "TCP"
-      }
-      # Ray Dashboard
+      # Ray job submission and dashboard
       ports {
         port     = "8265"
         protocol = "TCP"
       }
 
+      # Ray client
+      ports {
+        port     = "10001"
+        protocol = "TCP"
+      }
+
       from {
         namespace_selector {
-          match_labels = {
-            "kubernetes.io/metadata.name" = var.namespace
-          }
-        }
-        dynamic "namespace_selector" {
-          for_each = var.network_policy_allow_namespaces_by_label
-          content {
-            match_labels = {
-              each.key = each.value
-            }
-          }
-        }
-
-        dynamic "pod_selector" {
-          for_each = var.network_policy_allow_pods_by_label
-          content {
-            match_labels = {
-              each.key = each.value
-            }
-          }
-        }
-
-        dynamic "ip_block" {
-          for_each = var.network_policy_allow_ips
-          content {
-            cidr = each.key
+          match_expressions {
+            key      = "kubernetes.io/metadata.name"
+            operator = "In"
+            values   = var.network_policy_allow_namespaces
           }
         }
       }
@@ -153,7 +141,46 @@ resource "kubernetes_network_policy" "kuberay-head-network-policy" {
   }
 }
 
-# Allow all intranamespace traffic to allow intracluster traffic
+# Allow ingress to the kuberay head from outside the cluster
+resource "kubernetes_network_policy" "kuberay-head-cidr-network-policy" {
+  count = var.network_policy_allow_cidr != "" && !var.disable_network_policy ? 1 : 0
+  metadata {
+    name      = "terraform-kuberay-head-cidr-network-policy"
+    namespace = var.namespace
+  }
+
+  spec {
+    pod_selector {
+      match_labels = {
+        "ray.io/node-type" : "head"
+      }
+    }
+
+    ingress {
+      # Ray job submission and dashboard
+      ports {
+        port     = "8265"
+        protocol = "TCP"
+      }
+
+      # Ray client
+      ports {
+        port     = "10001"
+        protocol = "TCP"
+      }
+
+      from {
+        ip_block {
+          cidr = var.network_policy_allow_cidr
+        }
+      }
+    }
+
+    policy_types = ["Ingress"]
+  }
+}
+
+# Allow all same namespace and gmp traffic
 resource "kubernetes_network_policy" "kuberay-cluster-allow-network-policy" {
   count = var.disable_network_policy ? 0 : 1
   metadata {
@@ -175,8 +202,10 @@ resource "kubernetes_network_policy" "kuberay-cluster-allow-network-policy" {
 
       from {
         namespace_selector {
-          match_labels = {
-            "kubernetes.io/metadata.name" = var.namespace
+          match_expressions {
+            key      = "kubernetes.io/metadata.name"
+            operator = "In"
+            values   = [var.namespace, "gke-gmp-system"]
           }
         }
       }
@@ -185,3 +214,29 @@ resource "kubernetes_network_policy" "kuberay-cluster-allow-network-policy" {
     policy_types = ["Ingress"]
   }
 }
+
+# IAP Section: Creates the GKE components
+module "iap_auth" {
+  count  = var.add_auth ? 1 : 0
+  source = "../../modules/iap"
+
+  project_id               = var.project_id
+  namespace                = var.namespace
+  support_email            = var.support_email
+  app_name                 = "ray-dashboard"
+  create_brand             = var.create_brand
+  k8s_ingress_name         = var.k8s_ingress_name
+  k8s_managed_cert_name    = var.k8s_managed_cert_name
+  k8s_iap_secret_name      = var.k8s_iap_secret_name
+  k8s_backend_config_name  = var.k8s_backend_config_name
+  k8s_backend_service_name = "${helm_release.ray-cluster.name}-kuberay-head-svc"
+  k8s_backend_service_port = var.k8s_backend_service_port
+  client_id                = var.client_id
+  client_secret            = var.client_secret
+  domain                   = var.domain
+  depends_on = [
+    helm_release.ray-cluster,
+    data.kubernetes_service.head-svc,
+  ]
+}
+

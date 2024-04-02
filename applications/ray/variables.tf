@@ -55,7 +55,8 @@ variable "create_gcs_bucket" {
 }
 
 variable "gcs_bucket" {
-  type = string
+  type        = string
+  description = "The GCS bucket to store data for the Ray cluster."
 }
 
 variable "create_service_account" {
@@ -67,17 +68,18 @@ variable "create_service_account" {
 variable "workload_identity_service_account" {
   type        = string
   description = "Google Cloud IAM service account for authenticating with GCP services for GCS"
-  default     = "ray-service-account"
+  default     = "ray-sa"
 }
 
 variable "create_ray_cluster" {
-  type    = bool
-  default = false
+  type        = bool
+  default     = true
+  description = "Create a Ray cluster"
 }
 
 variable "ray_cluster_name" {
   type    = string
-  default = "example-cluster"
+  default = "ray-cluster"
 }
 
 variable "enable_gpu" {
@@ -182,4 +184,112 @@ variable "gpu_pools" {
 variable "goog_cm_deployment_name" {
   type    = string
   default = ""
+}
+
+# Ray-dashboard IAP settings
+variable "create_brand" {
+  type        = bool
+  description = "Create Brand OAuth Screen"
+  default     = false
+}
+
+variable "ray_dashboard_add_auth" {
+  type        = bool
+  description = "Enable iap authentication on frontend"
+  default     = true
+}
+
+variable "ray_dashboard_k8s_ingress_name" {
+  type    = string
+  default = "ray-dashboard-ingress"
+}
+
+variable "ray_dashboard_k8s_managed_cert_name" {
+  type        = string
+  description = "Name for frontend managed certificate"
+  default     = "ray-dashboard-managed-cert"
+}
+
+variable "ray_dashboard_k8s_iap_secret_name" {
+  type    = string
+  default = "ray-dashboard-secret"
+}
+
+variable "ray_dashboard_k8s_backend_config_name" {
+  type        = string
+  description = "Name of the Backend Config on GCP"
+  default     = "ray-dashboard-iap-config"
+}
+
+variable "ray_dashboard_k8s_backend_service_port" {
+  type        = number
+  description = "Name of the K8s Backend Service Port"
+  default     = 8265
+}
+
+variable "ray_dashboard_domain" {
+  type        = string
+  description = "Domain used for SSL certificate. If it's empty, *.nip.io DNS is used."
+  default     = ""
+}
+
+variable "support_email" {
+  type        = string
+  description = "Email for users to contact with questions about their consent"
+  default     = "<email>"
+}
+
+variable "ray_dashboard_client_id" {
+  type        = string
+  description = "Client ID used for enabling IAP"
+  default     = ""
+}
+
+variable "ray_dashboard_client_secret" {
+  type        = string
+  description = "Client secret used for enabling IAP"
+  default     = ""
+  sensitive   = false
+}
+
+variable "ray_dashboard_members_allowlist" {
+  type    = string
+  default = ""
+  ## keeping it string type to support single field input for marketplace UI.
+}
+
+# These default resource quotas are set intentionally high as an example that won't be limiting for most Ray clusters.
+# Consult https://kubernetes.io/docs/concepts/policy/resource-quotas/ for additional quotas that may be set.
+variable "resource_quotas" {
+  description = "Kubernetes ResourceQuota object to attach to the Ray cluster's namespace"
+  type        = map(string)
+  default = {
+    cpu                       = "1000"
+    memory                    = "10Ti"
+    "requests.nvidia.com/gpu" = "100"
+    "requests.google.com/tpu" = "100"
+  }
+}
+
+variable "disable_resource_quotas" {
+  description = "Set to true to remove resource quotas from your Ray clusters. Not recommended"
+  type        = bool
+  default     = false
+}
+
+# This is a list of CIDR ranges allowed to access a Ray cluster's job submission API and Dashboard.
+#
+# Example:
+# kuberay_network_policy_allow_cidr = "10.0.0.0/8"
+#
+variable "kuberay_network_policy_allow_cidr" {
+  description = "List of CIDRs that are allowed to access this Ray cluster's job submission and dashboard port."
+  type        = string
+  default     = ""
+}
+
+variable "disable_ray_cluster_network_policy" {
+  description = "Disables Kubernetes Network Policy for Ray Clusters for this demo. Defaulting to 'true' aka disabled pending fixes to the kuberay-monitoring module. This should be defaulted to false."
+  type        = bool
+  default     = false
 }

@@ -27,11 +27,11 @@ cluster_membership_id = "" # required only for private cluster, default: cluster
 #######################################################
 
 ## JupyterHub variables
-namespace                         = "jupyter"
+kubernetes_namespace              = "jupyter"
 gcs_bucket                        = "<gcs-bucket>"
 workload_identity_service_account = "jupyter-service-account"
 
-# Jupyterhub with IAP
+# JupyterHub with IAP
 add_auth                 = true
 brand                    = "projects/<prj-number>/brands/<prj-number>" # ensure brand is Internal
 support_email            = "<email>"
@@ -45,4 +45,4 @@ url_domain_addr   = ""
 url_domain_name   = ""
 client_id         = ""
 client_secret     = ""
-members_allowlist = ["allAuthenticatedUsers", "user:<email>"]
+members_allowlist = "user:<email>,group:<email>,serviceAccount:<email>,domain:google.com"

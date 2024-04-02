@@ -36,12 +36,25 @@ locals {
   }
 }
 
+data "google_compute_network" "existing-network" {
+  count   = var.create_network ? 0 : 1
+  name    = var.network_name
+  project = var.project_id
+}
+
+data "google_compute_subnetwork" "subnetwork" {
+  count   = var.create_network ? 0 : 1
+  name    = var.subnetwork_name
+  region  = var.subnetwork_region
+  project = var.project_id
+}
+
 module "custom-network" {
-  source       = "terraform-google-modules/network/google"
-  version      = "8.0.0"
+  source       = "../modules/gcp-network"
   count        = var.create_network ? 1 : 0
   project_id   = var.project_id
   network_name = var.network_name
+  create_psa   = true
 
   subnets = [
     {
@@ -52,14 +65,12 @@ module "custom-network" {
       description           = var.subnetwork_description
     }
   ]
-
-  #secondary_ranges = var.network_secondary_ranges
-  #firewall_rules = var.firewall_rules
 }
 
 locals {
   network_name    = var.create_network ? module.custom-network[0].network_name : var.network_name
   subnetwork_name = var.create_network ? module.custom-network[0].subnets_names[0] : var.subnetwork_name
+  subnetwork_cidr = var.create_network ? module.custom-network[0].subnets_ips[0] : data.google_compute_subnetwork.subnetwork[0].ip_cidr_range
   region          = length(split("-", var.cluster_location)) == 2 ? var.cluster_location : ""
   regional        = local.region != "" ? true : false
   # zone needs to be set even for regional clusters, otherwise this module picks random zones that don't have GPU availability:
@@ -105,6 +116,7 @@ module "public-gke-standard-cluster" {
   all_node_pools_labels       = var.all_node_pools_labels
   all_node_pools_metadata     = var.all_node_pools_metadata
   all_node_pools_tags         = var.all_node_pools_tags
+  depends_on                  = [module.custom-network]
 }
 
 ## create public GKE autopilot
@@ -129,6 +141,7 @@ module "public-gke-autopilot-cluster" {
   ip_range_services          = var.ip_range_services
   master_authorized_networks = var.master_authorized_networks
   deletion_protection        = var.deletion_protection
+  depends_on                 = [module.custom-network]
 
 }
 
@@ -155,7 +168,7 @@ module "private-gke-standard-cluster" {
   monitoring_enable_managed_prometheus = var.monitoring_enable_managed_prometheus
   gcs_fuse_csi_driver                  = var.gcs_fuse_csi_driver
   deletion_protection                  = var.deletion_protection
-  master_authorized_networks           = var.master_authorized_networks
+  master_authorized_networks           = length(var.master_authorized_networks) == 0 ? [{ cidr_block = "${local.subnetwork_cidr}", display_name = "${local.subnetwork_name}" }] : var.master_authorized_networks
   master_ipv4_cidr_block               = var.master_ipv4_cidr_block
 
   ## pools config variables
@@ -168,6 +181,7 @@ module "private-gke-standard-cluster" {
   all_node_pools_labels       = var.all_node_pools_labels
   all_node_pools_metadata     = var.all_node_pools_metadata
   all_node_pools_tags         = var.all_node_pools_tags
+  depends_on                  = [module.custom-network]
 }
 
 ## create private GKE autopilot
@@ -190,10 +204,10 @@ module "private-gke-autopilot-cluster" {
   release_channel            = var.release_channel
   ip_range_pods              = var.ip_range_pods
   ip_range_services          = var.ip_range_services
-  master_authorized_networks = var.master_authorized_networks
+  master_authorized_networks = length(var.master_authorized_networks) == 0 ? [{ cidr_block = "${local.subnetwork_cidr}", display_name = "${local.subnetwork_name}" }] : var.master_authorized_networks
   master_ipv4_cidr_block     = var.master_ipv4_cidr_block
   deletion_protection        = var.deletion_protection
-
+  depends_on                 = [module.custom-network]
 }
 
 

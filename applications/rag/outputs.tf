@@ -14,7 +14,12 @@
 
 output "jupyterhub_uri" {
   description = "JupyterHub Endpoint to access user interface. In case of private IP, consider port-forwarding."
-  value       = "http://${module.jupyterhub.jupyterhub_uri}"
+  value       = module.jupyterhub.jupyterhub_uri != "" ? "http://${module.jupyterhub.jupyterhub_uri}" : local.jupyterhub_default_uri
+}
+
+output "jupyterhub_ip_address" {
+  description = "JupyterHub global IP address"
+  value       = module.jupyterhub.jupyterhub_ip_address
 }
 
 output "jupyterhub_user" {
@@ -22,7 +27,7 @@ output "jupyterhub_user" {
   value       = module.jupyterhub.jupyterhub_user
 }
 
-output "jupyter_password" {
+output "jupyterhub_password" {
   description = "JupyterHub password is only required for standard authentication. Ignore, in case of IAP authentication"
   value       = module.jupyterhub.jupyterhub_password
   sensitive   = true
@@ -31,4 +36,29 @@ output "jupyter_password" {
 output "frontend_uri" {
   description = "RAG Frontend Endpoint to access user interface. In case of private IP, consider port-forwarding."
   value       = module.frontend.frontend_uri != "" ? "http://${module.frontend.frontend_uri}" : local.frontend_default_uri
+}
+
+output "frontend_ip_address" {
+  description = "Frontend global IP address"
+  value       = module.frontend.frontend_ip_address
+}
+
+output "ray_dashboard_uri" {
+  description = "Ray Dashboard Endpoint to access user interface. In case of private IP, consider port-forwarding."
+  value       = module.kuberay-cluster.ray_dashboard_uri != "" ? "http://${module.kuberay-cluster.ray_dashboard_uri}" : ""
+}
+
+output "ray_dashboard_ip_address" {
+  description = "Ray Dashboard global IP address"
+  value       = module.kuberay-cluster.ray_dashboard_ip_address
+}
+
+output "kubernetes_namespace" {
+  value       = local.kubernetes_namespace
+  description = "Kubernetes namespace"
+}
+
+output "gcp_network" {
+  value       = local.network_name
+  description = "Provisioned GCP Network Name"
 }

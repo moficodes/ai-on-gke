@@ -30,7 +30,7 @@ This code can also perform auto brand creation. Please check the details [below]
     * Terraform
     * Gcloud CLI
 
-Jupyterhub server can use either local storage or GCS to store notebooks and other artifcts. 
+JupyterHub server can use either local storage or GCS to store notebooks and other artifcts. 
 To use GCS, create a bucket with your username. For example, when authenticating with IAP as username@domain.com, ensure your bucket name is `gcsfuse-<username>`
 
 ## Installation
@@ -43,7 +43,7 @@ To use GCS, create a bucket with your username. For example, when authenticating
  cd ai-on-gke/applications/jupyter
  ```
 
-2. Edit `workloads.tfvars` with your GCP settings. The `namespace` that you specify will become a K8s namespace for your Jupyterhub services. For more information about what the variables do visit [here](https://github.com/GoogleCloudPlatform/ai-on-gke/blob/main/applications/jupyter/variable_definitions.md)
+2. Edit `workloads.tfvars` with your GCP settings. The `namespace` that you specify will become a K8s namespace for your JupyterHub services. For more information about what the variables do visit [here](https://github.com/GoogleCloudPlatform/ai-on-gke/blob/main/applications/jupyter/variable_definitions.md)
 
 **Important Note:**
 If using this with the Ray module (`applications/ray/`), it is recommended to use the same k8s namespace
@@ -55,12 +55,12 @@ for both i.e. set this to the same namespace as `applications/ray/workloads.tfva
 | cluster_name                | GKE Cluster Name                                                                                               | Yes      |
 | cluster_location            | GCP Region                                                                                                     | Yes      |
 | cluster_membership_id       | Fleet membership name for GKE cluster. <br /> Required when using private clusters with Anthos Connect Gateway | |
-| namespace                   | The namespace that Jupyterhub and rest of the other resources will be installed in.                            | Yes      |
+| namespace                   | The namespace that JupyterHub and rest of the other resources will be installed in.                            | Yes      |
 | gcs_bucket                  | GCS bucket to be used for Jupyter storage                                                                      |       |
 | create_service_account      | Create service accounts used for Workload Identity mapping                                                     | Yes      |
 | gcp_and_k8s_service_account | GCP service account used for Workload Identity mapping and k8s sa attached with workload                       | Yes      |
 
-For variables under `Jupyterhub with IAP`, please see the section below 
+For variables under `JupyterHub with IAP`, please see the section below 
 
 ### Secure endpoint with IAP
 
@@ -78,7 +78,7 @@ See the example `.tfvars` files under `/applications/jupyter` for different bran
 
 | Variable                 | Description                | Default Value | Required |
 | ------------------------ |--------------------------- |:-------------:|:--------:|
-| add_auth                 | Enable IAP on Jupyterhub   | true          | Yes      |
+| add_auth                 | Enable IAP on JupyterHub   | true          | Yes      |
 | brand                    | Name of the brand used for creating IAP OAuth clients. Only one is allowed per project. View existing brands: `gcloud iap oauth-brands list`. Leave it empty to create a new brand.  Uses [support_email](#support_email) |           |       |
 | support_email            | Support email assocated with the [brand](#brand). Used as a point of contact for consent for the ["OAuth Consent" in Cloud Console](https://console.cloud.google.com/apis/credentials/consent). Optional field if `brand` is empty.   |           |       |
 | default_backend_service  | default_backend_service   |           |       |
@@ -87,7 +87,7 @@ See the example `.tfvars` files under `/applications/jupyter` for different bran
 | url_domain_name          | This variable will only be used if [url_domain_addr](#url_domain_addr) is provided. It is the name associated with the domain provided by the user. Since we are using Ingress, it will require the `kubernetes.io/ingress.global-static-ip-name` annotation along with the name associated.   |           |       |
 | client_id                | Client ID of an [OAuth 2.0 Client ID](https://console.cloud.google.com/apis/credentials) created by the user for enabling IAP. You must also input the [client_secret](#client_secret). If this variable is unset, the template will create an OAuth client for you - in this case, you must ensure the associated [brand](https://console.cloud.google.com/apis/credentials/consent) is `Internal` i.e. only principals within the organization can access the application.   |           |       |
 | client_secret            | Client Secret associated with the [client_id](#client_id). This variable will only be used when the client id is filled out.     |           |       |
-| members_allowlist        | Comma seperated values for users to be allowed access through IAP. Example values: `allAuthenticatedUsers` or `allAuthenticatedUsers,user:username@domain.com`  | allAuthenticatedUsers     |       |
+| members_allowlist        | Comma seperated values for users to be allowed access through IAP. Example values: `user:username@domain.com`  |      |       |
 
 
 ### Install
@@ -109,19 +109,17 @@ gcloud auth application-default login
         - Should have `jupyter-proxy-public` in the name eg.: `k8s1-63da503a-jupyter-proxy-public-80-74043627`.
     * Run `terraform apply --var-file=./workloads.tfvars`
 
-## Using Jupyterhub
+## Using JupyterHub
 
 ### If Auth with IAP is disabled
 
-1. Extract the randomly generated password for Jupyterhub login
+1. Extract the randomly generated password for JupyterHub login
 
 ```
 terraform output password
 ```
 
-2. Visit [Services](https://console.cloud.google.com/kubernetes/discovery) section on the GKE console & open the external IP for the `proxy-public` service in the browser.
-
-> **_NOTE:_** If there isn't an external IP for `proxy-public`, is it most likely due to authentication being enabled.
+2. Setup port forwarding for the frontend: `kubectl port-forward service/proxy-public -n <namespace> 8081:80 &`, and open `localhost:8081` in a browser.
 
 ### If Auth with IAP is enabled
 
@@ -139,17 +137,17 @@ Please note there may be some propagation delay after adding IAP principals (5-1
 
 ### Setup Access
 
-In order for users to login to Jupyterhub via IAP, their access needs to be configured. To allow access for users/groups: 
+In order for users to login to JupyterHub via IAP, their access needs to be configured. To allow access for users/groups: 
 
 1. Navigate to the [GCP IAP Cloud Console](https://console.cloud.google.com/security/iap) and select your backend-service for `<namespace>/proxy-public`.
 
-2. Click on `Add Principal`, insert the username / group name and select under `Cloud IAP` with role `IAP-secured Web App User`. Once presmission is granted, these users / groups can login to Jupyterhub with IAP. Please note there may be some propagation delay after adding IAP principals (5-10 mins).
+2. Click on `Add Principal`, insert the username / group name and select under `Cloud IAP` with role `IAP-secured Web App User`. Once presmission is granted, these users / groups can login to JupyterHub with IAP. Please note there may be some propagation delay after adding IAP principals (5-10 mins).
 
 ## Persistent Storage
 
-Jupyterhub is configured to provide 2 choices for storage:
+JupyterHub is configured to provide 2 choices for storage:
 
-1. Default Jupyterhub Storage - `pd.csi.storage.gke.io` with reclaim policy `Delete`
+1. Default JupyterHub Storage - `pd.csi.storage.gke.io` with reclaim policy `Delete`
 
 2. GCSFuse - `gcsfuse.csi.storage.gke.io` uses GCS Buckets and require users to pre-create buckets with name format `gcsfuse-{username}`
 
@@ -194,4 +192,4 @@ This module uses `<ip>.nip.io` as the domain name with a global static ipv4 addr
 
 ## Additional Information
 
-For more information about Jupyterhub profiles and the preset profiles visit [here](https://github.com/GoogleCloudPlatform/ai-on-gke/blob/main/applications/jupyter/profiles.md)
+For more information about JupyterHub profiles and the preset profiles visit [here](https://github.com/GoogleCloudPlatform/ai-on-gke/blob/main/applications/jupyter/profiles.md)

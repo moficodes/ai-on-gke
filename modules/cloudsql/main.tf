@@ -12,44 +12,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Enabled the SQLAdmin service 
-resource "google_project_service" "project_service" {
-  project = var.project_id
-  service = "sqladmin.googleapis.com"
-
-  disable_dependent_services = false
-  disable_on_destroy         = false
-}
-
-resource "google_sql_database_instance" "main" {
-  name             = var.instance_name
-  database_version = "POSTGRES_15"
-  region           = var.region
-  settings {
-    # Second-generation instance tiers are based on the machine
-    # type. See argument reference below.
-    tier = "db-f1-micro"
-  }
-
-  deletion_protection = false
-}
-
-resource "google_sql_database" "database" {
-  name     = "pgvector-database"
-  instance = var.instance_name
-
-  depends_on = [google_sql_database_instance.main]
-}
-
 resource "random_password" "pwd" {
   length  = 16
   special = false
 }
 
-resource "google_sql_user" "cloudsql_user" {
-  name     = var.db_user
-  instance = google_sql_database_instance.main.name
-  password = random_password.pwd.result
+module "cloudsql" {
+  source              = "terraform-google-modules/sql-db/google//modules/postgresql"
+  project_id          = var.project_id
+  version             = "20.0.0"
+  name                = var.instance_name
+  database_version    = "POSTGRES_15"
+  region              = var.region
+  deletion_protection = false
+  tier                = "db-f1-micro"
+
+  database_deletion_policy = "ABANDON"
+  user_deletion_policy     = "ABANDON"
+
+  ip_configuration = {
+    # Disable public IP
+    ipv4_enabled                                  = false
+    private_network                               = "projects/${var.project_id}/global/networks/${var.network_name}"
+    enable_private_path_for_google_cloud_services = true
+  }
+
+  // By default, all users will be permitted to connect only via the
+  // Cloud SQL proxy.
+  // Create an additional user here for connection from the workload.
+  additional_users = [
+    {
+      name            = var.db_user
+      password        = random_password.pwd.result
+      host            = "localhost"
+      type            = "BUILT_IN"
+      random_password = false
+    },
+  ]
+
+  additional_databases = [
+    {
+      name      = "pgvector-database"
+      charset   = "UTF8"
+      collation = "en_US.UTF8"
+    },
+  ]
 }
 
 resource "kubernetes_secret" "secret" {

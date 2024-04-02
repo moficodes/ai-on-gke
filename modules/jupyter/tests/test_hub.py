@@ -4,11 +4,17 @@ import yaml
 
 from packaging.version import Version as V
 
+config_file = "../jupyter_config/config-selfauth.yaml"
+if len(sys.argv) == 3:
+    autopilot = (sys.argv[2] == "true")
+    if autopilot:
+        config_file = "../jupyter_config/config-selfauth-autopilot.yaml"
+
 
 def test_hub_up(hub_url):
     r = requests.get(hub_url)
     r.raise_for_status()
-    print("Jupyterhub up.")
+    print("JupyterHub up.")
 
 
 def test_api_root(hub_url):
@@ -23,7 +29,7 @@ def test_api_root(hub_url):
     r.raise_for_status()
     info = r.json()
     assert V("4") <= V(info["version"]) <= V("5")
-    print("Jupyterhub Rest API is working.")
+    print("JupyterHub Rest API is working.")
 
 
 def test_hub_login(hub_url):
@@ -32,7 +38,7 @@ def test_hub_login(hub_url):
     from /jupyter_config/config.yaml. After successfully login, user will be 
     redirected to /hub/spawn.
     """
-    with open("../jupyter_config/config-selfauth.yaml", "r") as yaml_file:
+    with open(config_file, "r") as yaml_file:
         data = yaml.safe_load(yaml_file)
 
     username = data["hub"]["config"]["Authenticator"]["admin_users"][0]
@@ -54,7 +60,7 @@ def test_hub_login(hub_url):
     )
     response.raise_for_status()
     assert response.url == (hub_url + "/hub/spawn")
-    print("Jupyterhub login success.")
+    print("JupyterHub login success.")
 
 
 hub_url = "http://" + sys.argv[1]
