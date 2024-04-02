@@ -1,103 +1,130 @@
 # Ray on GKE
 
-This repository contains a Terraform template for running [Ray](https://www.ray.io/) on Google Kubernetes Engine.
-We've also included some example notebooks (`ai-on-gke/ray-on-gke/example_notebooks`), including one that serves a GPT-J-6B model with Ray AIR (see
-[here](https://docs.ray.io/en/master/ray-air/examples/gptj_serving.html) for the original notebook).
+This directory contains examples, guides and best practices for running [Ray](https://www.ray.io/) on Google Kubernetes Engine.
+Most examples use the [`applications/ray`](/applications/ray) terraform module to install KubeRay and deploy RayCluster resources.
 
-This module assumes you already have a functional GKE cluster. If not, follow the instructions under `ai-on-gke/gke-platform/README.md`
-to install a Standard or Autopilot GKE cluster, then follow the instructions in this module to install Ray. 
+## Getting Started
 
-This module deploys the following, once per user:
-* User namespace
-* Kubernetes service accounts
-* Kuberay cluster
-* Prometheus monitoring
-* Logging container
+It is highly recommended to use the [infrastructure](/infrastructure/) terraform module to create your GKE cluster.
 
-## Installation
+### Create a RayCluster on a GKE cluster
 
-Preinstall the following on your computer:
-* Kubectl
-* Terraform 
-* Helm
-* Gcloud
+Edit `templates/workloads.tfvars` with your environment specific variables and configurations.
+The following variables require configuration:
+* project_id
+* cluster_name
+* cluster_location
 
-> **_NOTE:_** Terraform keeps state metadata in a local file called `terraform.tfstate`. Deleting the file may cause some resources to not be cleaned up correctly even if you delete the cluster. We suggest using `terraform destory` before reapplying/reinstalling.
+If you need a new cluster, you can specify `create_cluster: true`.
 
-1. If needed, git clone https://github.com/GoogleCloudPlatform/ai-on-gke
-
-2. `cd ai-on-gke/ray-on-gke/user`
-
-3. Edit `variables.tf` with your GCP settings. The `<your user name>` that you specify will become a K8s namespace for your Ray services.
-
-4. Run `terraform init`
-
-5. Find the name and location of the GKE cluster you want to use.
-   Run `gcloud container clusters list --project=<your GCP project>` to see all the available clusters.
-   _Note: If you created the GKE cluster via the ai-on-gke/gke-platform repo, you can get the cluster info from `ai-on-gke/gke-platform/variables.tf`_
-
-6. Run `gcloud container clusters get-credentials %gke_cluster_name% --location=%location%`
-   Configuring `gcloud` [instructions](https://cloud.google.com/sdk/docs/initializing)
-
-7. Run `terraform apply`
-
-## Using Ray with Ray Jobs API
-
-1. To connect to the remote GKE cluster with the Ray API, setup the Ray dashboard.
-Run the following command to port-forward:
+Run the following commands to install KubeRay and deploy a Ray cluster onto your existing cluster.
 ```
-kubectl port-forward -n <namespace> service/example-cluster-kuberay-head-svc 8265:8265
+cd templates/
+terraform init
+terraform apply --var-file=workloads.tfvars
 ```
 
-And then open the dashboard using the following URL:
+Validate that the RayCluster is ready:
 ```
-http://localhost:8265
-```
-
-2. Set the RAY_ADDRESS environment variable:
-`export RAY_ADDRESS="http://127.0.0.1:8265"` 
-
-3. Create a working directory with some job file `ray_job.py`.
-
-4. Submit the job:
-`ray job submit --working-dir %your_working_directory% -- python ray_job.py`
-
-5. Note the job submission ID from the output, eg.:
-`Job 'raysubmit_inB2ViQuE29aZRJ5' succeeded`
-
-See [Ray docs](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/quickstart.html#submitting-a-job) for more info.
-
-## Using Ray with Jupyter
-
-If you want to connect to the Ray cluster via a Jupyter notebook or to try the example notebooks in the repo, please
-first install JupyterHub via `ai-on-gke/jupyter-on-gke/README.md`.
-
-## Logging and Monitoring
-
-This repository comes with out-of-the-box integrations with Google Cloud Logging
-and Managed Prometheus for monitoring. To see your Ray cluster logs:
-
-1. Open Cloud Console and open Logging
-2. If using Jupyter notebook for job submission, use the following query parameters:
-```
-resource.type="k8s_container"
-resource.labels.cluster_name=%CLUSTER_NAME%
-resource.labels.pod_name=%RAY_HEAD_POD_NAME%
-resource.labels.container_name="fluentbit"
-```
-3. If using Ray Jobs API:
-(a) Note the job ID returned by the `ray job submit` API.
-Eg: Job submission: `ray job submit --working-dir /Users/imreddy/ray_working_directory  -- python script.py`
-    Job submission ID: `Job 'raysubmit_kFWB6VkfyqK1CbEV' submitted successfully`
-(b) Get the namespace name from `user/variables.tf` or `kubectl get namespaces`
-(c) Use the following query to search for the job logs:
-
-```
-resource.labels.namespace_name=%NAMESPACE_NAME%
-jsonpayload.job_id=%RAY_JOB_ID%
+$ kubectl get raycluster
+NAME                  DESIRED WORKERS   AVAILABLE WORKERS   STATUS   AGE
+ray-cluster-kuberay   1                 1                   ready    3m41s
 ```
 
-To see monitoring metrics:
-1. Open Cloud Console and open Metrics Explorer
-2. In "Target", select "Prometheus Target" and then "Ray".
-3. Select the metric you want to view, and then click "Apply".
+See [tfvars examples](./examples/tfvars/) to explore different configuration options for the Ray cluster using the [terraform templates](./templates).
+
+### Install Ray
+
+Ensure Ray is installed in your environment. See [Installing Ray](https://docs.ray.io/en/latest/ray-overview/installation.html) for more details.
+
+### Submit a Ray job
+
+To submit a Ray job, first establish a connection to the Ray head. For this example we'll use `kubectl port-forward`
+to connect to the Ray head via localhost.
+
+```bash
+$ kubectl -n ai-on-gke port-forward service/ray-cluster-kuberay-head-svc 8265 &
+```
+
+Submit a Ray job that prints resources available in your Ray cluster:
+```bash
+$ ray job submit --address http://localhost:8265 -- python -c "import ray; ray.init(); print(ray.cluster_resources())"
+Job submission server address: http://localhost:8265
+
+-------------------------------------------------------
+Job 'raysubmit_4JBD9mLhh9sjqm8g' submitted successfully
+-------------------------------------------------------
+
+Next steps
+  Query the logs of the job:
+    ray job logs raysubmit_4JBD9mLhh9sjqm8g
+  Query the status of the job:
+    ray job status raysubmit_4JBD9mLhh9sjqm8g
+  Request the job to be stopped:
+    ray job stop raysubmit_4JBD9mLhh9sjqm8g
+
+Tailing logs until the job exits (disable with --no-wait):
+2024-03-19 20:46:28,668 INFO worker.py:1405 -- Using address 10.80.0.19:6379 set in the environment variable RAY_ADDRESS
+2024-03-19 20:46:28,668 INFO worker.py:1540 -- Connecting to existing Ray cluster at address: 10.80.0.19:6379...
+2024-03-19 20:46:28,677 INFO worker.py:1715 -- Connected to Ray cluster. View the dashboard at 10.80.0.19:8265
+{'node:__internal_head__': 1.0, 'object_store_memory': 2295206707.0, 'memory': 8000000000.0, 'CPU': 4.0, 'node:10.80.0.19': 1.0}
+Handling connection for 8265
+
+------------------------------------------
+Job 'raysubmit_4JBD9mLhh9sjqm8g' succeeded
+------------------------------------------
+```
+
+### Ray Client for interactive sessions
+
+The RayClient API enables Python scripts to interactively connect to remote Ray clusters. See [Ray Client](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/ray-client.html) for more details.
+
+To use the client, first establish a connection to the Ray head. For this example we'll use `kubectl port-forward`
+to connect to the Ray head Service via localhost.
+
+```bash
+$ kubectl -n ai-on-gke port-forward service/ray-cluster-kuberay-head-svc 10001 &
+```
+
+Next, define a Python script containing remote code you want to run on your Ray cluster. Similar to the previous example,
+this remote function will print the resources available in the cluster:
+```python
+# cluster_resources.py
+import ray
+
+ray.init("ray://localhost:10001")
+
+@ray.remote
+def cluster_resources():
+  return ray.cluster_resources()
+
+print(ray.get(cluster_resources.remote()))
+```
+
+Run the Python script:
+```
+$ python cluster_resources.py
+{'CPU': 4.0, 'node:__internal_head__': 1.0, 'object_store_memory': 2280821145.0, 'node:10.80.0.22': 1.0, 'memory': 8000000000.0}
+```
+
+## Guides & Tutorials
+
+See the following guides and tutorials for running Ray applications on GKE:
+* [Getting Started with KubeRay](https://docs.ray.io/en/latest/cluster/kubernetes/getting-started.html)
+* [Serve an LLM on L4 GPUs with Ray](https://cloud.google.com/kubernetes-engine/docs/how-to/serve-llm-l4-ray)
+* [Logging & Monitoring for Ray clusters](./guides/observability)
+* [TPU Guide](./guides/tpu/)
+* [Priority Scheduling with RayJob and Kueue](https://docs.ray.io/en/master/cluster/kubernetes/examples/rayjob-kueue-priority-scheduling.html)
+* [Gang Scheduling with RayJob and Kueue](https://docs.ray.io/en/master/cluster/kubernetes/examples/rayjob-kueue-gang-scheduling.html)
+* [RayTrain with GCSFuse CSI driver](./guides/raytrain-with-gcsfusecsi/)
+* [Configuring KubeRay to use Google Cloud Storage Buckets in GKE](https://docs.ray.io/en/latest/cluster/kubernetes/user-guides/gke-gcs-bucket.html)
+* [Example Notebooks with Ray](./examples/notebooks/)
+* [Example templates for Ray clusterse](./examples/tfvars/)
+
+## Blogs & Best Practices
+
+* [Getting started with Ray on Google Kubernetes Engine](https://cloud.google.com/blog/products/containers-kubernetes/use-ray-on-kubernetes-with-kuberay)
+* [Why GKE for your Ray AI workloads?](https://cloud.google.com/blog/products/containers-kubernetes/the-benefits-of-using-gke-for-running-ray-ai-workloads)
+* [Advanced scheduling for AI/ML with Ray and Kueue](https://cloud.google.com/blog/products/containers-kubernetes/using-kuberay-and-kueue-to-orchestrate-ray-applications-in-gke)
+* [How to secure Ray on Google Kubernetes Engine](https://cloud.google.com/blog/products/containers-kubernetes/securing-ray-to-run-on-google-kubernetes-engine)
+* [4 ways to reduce cold start latency on Google Kubernetes Engine](https://cloud.google.com/blog/products/containers-kubernetes/tips-and-tricks-to-reduce-cold-start-latency-on-gke)

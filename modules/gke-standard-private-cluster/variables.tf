@@ -15,7 +15,6 @@
 variable "project_id" {
   type        = string
   description = "GCP project id"
-  default     = "umeshkumhar"
 }
 
 variable "region" {
@@ -39,11 +38,15 @@ variable "cluster_name" {
 }
 
 variable "cluster_labels" {
-  type        = map
+  type        = map(any)
   description = "GKE cluster labels"
 }
 
 variable "kubernetes_version" {
+  type = string
+}
+
+variable "release_channel" {
   type = string
 }
 
@@ -68,13 +71,25 @@ variable "monitoring_enable_managed_prometheus" {
   type    = bool
   default = false
 }
-
+variable "gcs_fuse_csi_driver" {
+  type    = bool
+  default = false
+}
+variable "deletion_protection" {
+  type    = bool
+  default = false
+}
 variable "master_authorized_networks" {
   type = list(object({
     cidr_block   = string
     display_name = string
   }))
   default = []
+}
+
+variable "master_ipv4_cidr_block" {
+  type    = string
+  default = ""
 }
 
 variable "all_node_pools_oauth_scopes" {
@@ -111,4 +126,10 @@ variable "gpu_pools" {
 
 variable "tpu_pools" {
   type = list(map(any))
+}
+
+variable "datapath_provider" {
+  description = "Default to Dataplanev2"
+  type        = string
+  default     = "ADVANCED_DATAPATH"
 }

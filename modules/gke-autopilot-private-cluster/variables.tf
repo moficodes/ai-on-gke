@@ -15,7 +15,6 @@
 variable "project_id" {
   type        = string
   description = "GCP project id"
-  default     = "umeshkumhar"
 }
 
 variable "region" {
@@ -39,11 +38,15 @@ variable "cluster_name" {
 }
 
 variable "cluster_labels" {
-  type        = map
+  type        = map(any)
   description = "GKE cluster labels"
 }
 
 variable "kubernetes_version" {
+  type = string
+}
+
+variable "release_channel" {
   type = string
 }
 
@@ -71,4 +74,13 @@ variable "master_authorized_networks" {
     display_name = string
   }))
   default = []
+}
+variable "deletion_protection" {
+  type    = bool
+  default = false
+}
+
+variable "master_ipv4_cidr_block" {
+  type    = string
+  default = ""
 }

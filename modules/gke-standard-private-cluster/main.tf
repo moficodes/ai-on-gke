@@ -16,21 +16,24 @@ locals {
   node_pools = concat((var.enable_gpu ? var.gpu_pools : []), (var.enable_tpu ? var.tpu_pools : []), var.cpu_pools)
 }
 
-
 module "gke" {
   source                               = "terraform-google-modules/kubernetes-engine/google//modules/private-cluster"
-  version                              = "28.0.0"
+  version                              = "29.0.0"
   project_id                           = var.project_id
   regional                             = var.cluster_regional
   name                                 = var.cluster_name
   cluster_resource_labels              = var.cluster_labels
   kubernetes_version                   = var.kubernetes_version
+  release_channel                      = var.release_channel
   region                               = var.cluster_region
   zones                                = var.cluster_zones
   network                              = var.network_name
   subnetwork                           = var.subnetwork_name
   ip_range_pods                        = var.ip_range_pods
   ip_range_services                    = var.ip_range_services
+  gcs_fuse_csi_driver                  = var.gcs_fuse_csi_driver
+  deletion_protection                  = var.deletion_protection
+  datapath_provider                    = var.datapath_provider
   remove_default_node_pool             = true
   logging_enabled_components           = ["SYSTEM_COMPONENTS", "WORKLOADS"]
   monitoring_enabled_components        = ["SYSTEM_COMPONENTS"]
@@ -40,6 +43,7 @@ module "gke" {
   enable_private_endpoint    = true
   enable_private_nodes       = true
   master_authorized_networks = var.master_authorized_networks
+  master_ipv4_cidr_block     = var.master_ipv4_cidr_block
 
   node_pools = local.node_pools
 
@@ -63,7 +67,8 @@ module "gke" {
 # GKE cluster fleet registration
 resource "google_gke_hub_membership" "gke-fleet" {
   project       = var.project_id
-  membership_id = "${var.cluster_name}-${var.cluster_region}"
+  membership_id = var.cluster_name
+  location      = var.cluster_region
 
   endpoint {
     gke_cluster {

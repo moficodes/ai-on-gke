@@ -14,17 +14,19 @@
 
 module "gke" {
   source                     = "terraform-google-modules/kubernetes-engine/google//modules/beta-autopilot-public-cluster"
-  version                    = "28.0.0"
+  version                    = "29.0.0"
   project_id                 = var.project_id
   regional                   = var.cluster_regional
   name                       = var.cluster_name
   cluster_resource_labels    = var.cluster_labels
   region                     = var.cluster_region
   kubernetes_version         = var.kubernetes_version
+  release_channel            = var.release_channel
   zones                      = var.cluster_zones
   network                    = var.network_name
   subnetwork                 = var.subnetwork_name
   ip_range_pods              = var.ip_range_pods
   ip_range_services          = var.ip_range_services
   master_authorized_networks = var.master_authorized_networks
+  deletion_protection        = var.deletion_protection
 }
