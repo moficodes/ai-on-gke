@@ -2,9 +2,6 @@
 title: "Startup Latency"
 linkTitle: "Startup Latency"
 weight: 10
-menu:
-  main:
-    weight: 10
 ---
 
 ## Best Practices for Faster Workload Cold Start

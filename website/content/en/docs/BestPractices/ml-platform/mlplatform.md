@@ -1,13 +1,8 @@
 ---
-title: "ML Platform"
+title: "Machine learning platform (MLP) on GKE reference architecture for enabling Machine Learning Operations (MLOps)"
 linkTitle: "ML Platform"
 weight: 10
-menu:
-  main:
-    weight: 10
 ---
-
-# Machine learning platform (MLP) on GKE reference architecture for enabling Machine Learning Operations (MLOps)
 
 ## Platform Principles
 
